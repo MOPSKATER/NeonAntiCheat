@@ -14,21 +14,15 @@ namespace AntiCheat
             HarmonyLib.Harmony harmony = new("de.MOPSKATER.ac");
 
             MethodInfo target = typeof(LevelStats).GetMethod("UpdateTimeMicroseconds");
-            Debug.Log(target);
             HarmonyMethod patch = new(typeof(AnticheatInternal).GetMethod("PreventNewScore"));
-            Debug.Log(typeof(AnticheatInternal).GetMethod("PreventNewScore"));
             harmony.Patch(target, patch);
 
             target = typeof(Game).GetMethod("OnLevelWin");
-            Debug.Log(target);
             patch = new(typeof(AnticheatInternal).GetMethod("PreventNewGhost"));
-            Debug.Log(typeof(AnticheatInternal).GetMethod("PreventNewGhost"));
             harmony.Patch(target, patch);
 
             target = typeof(LevelRush).GetMethod("IsCurrentLevelRushScoreBetter", BindingFlags.NonPublic | BindingFlags.Static);
-            Debug.Log(target);
             patch = new(typeof(AnticheatInternal).GetMethod("PreventNewBestLevelRush"));
-            Debug.Log(typeof(AnticheatInternal).GetMethod("PreventNewBestLevelRush"));
             harmony.Patch(target, patch);
         }
 
