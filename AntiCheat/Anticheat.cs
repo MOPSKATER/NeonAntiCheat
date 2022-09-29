@@ -1,6 +1,4 @@
-﻿using MelonLoader;
-
-namespace AntiCheat
+﻿namespace AntiCheat
 {
     public class Anticheat
     {
