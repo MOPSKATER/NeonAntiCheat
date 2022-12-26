@@ -1,7 +1,6 @@
 ﻿using HarmonyLib;
 using MelonLoader;
 using System.Reflection;
-using UnityEngine;
 
 namespace AntiCheat
 {
@@ -9,6 +8,7 @@ namespace AntiCheat
     {
         internal static bool AnticheatTriggered { get; set; }
 
+        [Obsolete]
         public override void OnApplicationLateStart()
         {
             HarmonyLib.Harmony harmony = new("de.MOPSKATER.ac");
