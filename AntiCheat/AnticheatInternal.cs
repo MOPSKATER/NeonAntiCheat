@@ -1,6 +1,7 @@
 ﻿using HarmonyLib;
 using MelonLoader;
 using System.Reflection;
+using UnityEngine;
 
 namespace AntiCheat
 {
@@ -8,52 +9,66 @@ namespace AntiCheat
     {
         internal static bool AnticheatTriggered { get; set; }
 
+        private static readonly MethodInfo DeserializeLevelDataCompressed = typeof(GhostUtils).GetMethod("DeserializeLevelDataCompressed", BindingFlags.NonPublic | BindingFlags.Static);
+
         public override void OnApplicationLateStart()
         {
             HarmonyLib.Harmony harmony = new("de.MOPSKATER.ac");
 
-            MethodInfo target = typeof(LevelStats).GetMethod("UpdateTimeMicroseconds");
-            HarmonyMethod patch = new(typeof(AnticheatInternal).GetMethod("PreventNewScore"));
+            MethodInfo target = typeof(GhostRecorder).GetMethod("GetCompressedSavePath", BindingFlags.NonPublic | BindingFlags.Static);
+            HarmonyMethod patch = new(typeof(AnticheatInternal).GetMethod("RedirectGhost"));
+            harmony.Patch(target, null, patch);
+            
+            target = typeof(GhostUtils).GetMethod("LoadLevelDataCompressed");
+            patch = new(typeof(AnticheatInternal).GetMethod("LoadCustomGhost"));
             harmony.Patch(target, patch);
 
-            target = typeof(Game).GetMethod("OnLevelWin");
-            patch = new(typeof(AnticheatInternal).GetMethod("PreventNewGhost"));
-            harmony.Patch(target, patch);
-
-            target = typeof(LevelRush).GetMethod("IsCurrentLevelRushScoreBetter", BindingFlags.NonPublic | BindingFlags.Static);
-            patch = new(typeof(AnticheatInternal).GetMethod("PreventNewBestLevelRush"));
+            target = typeof(string).GetMethod("Concat", new Type[] { typeof(string[]) });
+            patch = new(typeof(AnticheatInternal).GetMethod("PreConcat"));
             harmony.Patch(target, patch);
         }
 
-        public static bool PreventNewScore(LevelStats __instance, ref long newTime)
+        public static void RedirectGhost(ref string __result)
         {
-            if (newTime < __instance._timeBestMicroseconds)
+            if (Anticheat.activeMods.Count == 0 || !__result.EndsWith("0.phant")) return;
+            __result = __result.Substring(0, __result.Length - 7) + Anticheat.comboName + ".phant";
+        }
+
+        public static bool LoadCustomGhost(ref GhostSave ghostSave, ref GhostUtils.GhostType ghostType, ref Action callback)
+        {
+            if (Anticheat.activeMods.Count == 0) return true;
+
+            ghostSave = new GhostSave();
+            string text = "";
+            if (!GhostUtils.GetPath(ghostType, ref text))
             {
-                if (!AnticheatTriggered)
-                    __instance._timeBestMicroseconds = newTime;
-                else
-                    if (__instance._timeBestMicroseconds == 999999999999L)
-                    __instance._timeBestMicroseconds = 600000000;
-                __instance._newBest = true;
+                return false;
             }
-            else
-                __instance._newBest = false;
-            __instance._timeLastMicroseconds = newTime;
+            text = text + Path.DirectorySeparatorChar.ToString() + Anticheat.comboName + ".phant";
+            string data = "";
+            if (File.Exists(text))
+            {
+                Debug.LogError(text + " path ");
+                data = File.ReadAllText(text);
+            }
+            try
+            {
+                DeserializeLevelDataCompressed.Invoke(null, new object[] { ghostSave, data, callback });
+            }
+            catch
+            {
+                File.Delete(text);
+            }
+            callback?.Invoke();
             return false;
         }
 
-        public static bool PreventNewGhost(Game __instance)
+        public static void PreConcat(ref string[] values)
         {
-            if (AnticheatTriggered)
-                __instance.winAction = null;
-            return true;
-        }
+            if (Anticheat.activeMods.Count == 0) return;
 
-        public static bool PreventNewBestLevelRush(ref bool __result)
-        {
-            if (!AnticheatTriggered) return true;
-            __result = false;
-            return false;
+            if (values.Length == 5 && values[4] == "medallog.txt")
+                values[4] = "Medals " + Anticheat.comboName + ".txt";
         }
     }
 }
