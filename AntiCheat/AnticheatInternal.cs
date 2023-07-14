@@ -26,6 +26,20 @@ namespace AntiCheat
             target = typeof(string).GetMethod("Concat", new Type[] { typeof(string[]) });
             patch = new(typeof(AnticheatInternal).GetMethod("PreConcat"));
             harmony.Patch(target, patch);
+
+            // Try to prevent times <= 0
+
+            target = typeof(LeaderboardScoreCalculation).GetMethod("GetGlobalNeonScoreUploadData", new Type[] { typeof(string[]) });
+            patch = new(typeof(AnticheatInternal).GetMethod("PreventRushGlobal"));
+            harmony.Patch(target, null, patch);
+
+            target = typeof(LeaderboardScoreCalculation).GetMethod("GetLevelRushScoreUploadData", new Type[] { typeof(string[]) });
+            patch = new(typeof(AnticheatInternal).GetMethod("PreventRushGlobal"));
+            harmony.Patch(target, null, patch);
+
+            target = typeof(LeaderboardScoreCalculation).GetMethod("GetLevelScoreUploadData", new Type[] { typeof(string[]) });
+            patch = new(typeof(AnticheatInternal).GetMethod("PreventIL"));
+            harmony.Patch(target, null, patch);
         }
 
         public static void RedirectGhost(ref string __result)
@@ -69,6 +83,18 @@ namespace AntiCheat
 
             if (values.Length == 5 && values[4] == "medallog.txt")
                 values[4] = "Medals " + Anticheat.comboName + ".txt";
+        }
+
+        public static void PreventRushGlobal(ref int score, ref int scoreParam) => CheckAndKill(score, "Rush or Global");
+
+        public static void PreventIL(ref LevelData levelData, ref int score) => CheckAndKill(score, levelData.levelID);
+
+        private static void CheckAndKill(int score, string message)
+        {
+            if (score > 0) return;
+
+            Debug.LogError("Illegal score on " + message + " " + score);
+            Application.Quit();
         }
     }
 }
