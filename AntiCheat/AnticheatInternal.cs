@@ -10,15 +10,17 @@ namespace AntiCheat
         internal static bool AnticheatTriggered { get; set; }
 
         private static readonly MethodInfo DeserializeLevelDataCompressed = typeof(GhostUtils).GetMethod("DeserializeLevelDataCompressed", BindingFlags.NonPublic | BindingFlags.Static);
+        private static readonly MethodInfo ParseLevelTotalTimeCompressed = typeof(GhostUtils).GetMethod("ParseLevelTotalTimeCompressed", BindingFlags.NonPublic | BindingFlags.Static);
+        private static readonly MethodInfo SaveCompressedInternal = typeof(GhostRecorder).GetMethod("SaveCompressedInternal", BindingFlags.NonPublic | BindingFlags.Static);
 
         public override void OnApplicationLateStart()
         {
             HarmonyLib.Harmony harmony = new("de.MOPSKATER.ac");
 
-            MethodInfo target = typeof(GhostRecorder).GetMethod("GetCompressedSavePath", BindingFlags.NonPublic | BindingFlags.Static);
-            HarmonyMethod patch = new(typeof(AnticheatInternal).GetMethod("RedirectGhost"));
-            harmony.Patch(target, null, patch);
-            
+            MethodInfo target = typeof(GhostRecorder).GetMethod("SaveCompressed", BindingFlags.Public | BindingFlags.Static);
+            HarmonyMethod patch = new(typeof(AnticheatInternal).GetMethod("PreSaveCompressed"));
+            harmony.Patch(target, patch);
+
             target = typeof(GhostUtils).GetMethod("LoadLevelDataCompressed");
             patch = new(typeof(AnticheatInternal).GetMethod("LoadCustomGhost"));
             harmony.Patch(target, patch);
@@ -42,10 +44,42 @@ namespace AntiCheat
             harmony.Patch(target, null, patch);
         }
 
-        public static void RedirectGhost(ref string __result)
+        public static bool PreSaveCompressed(ref GhostFrame[] framesToSave, ref int index, ref string forcedPath, ref ulong forcedID, ref bool saveToTemp)
         {
-            if (Anticheat.activeMods.Count == 0 || !__result.EndsWith("0.phant")) return;
-            __result = __result.Substring(0, __result.Length - 7) + Anticheat.comboName + ".phant";
+            if (Anticheat.activeMods.Count == 0 || forcedID > 0) return true;
+
+            float totalTime = framesToSave[index - 1].time;
+            if (totalTime >= Singleton<Game>.Instance.GetCurrentLevel().GetTimeSilver() * 2f) return false;
+
+            string path = "";
+            GhostUtils.GetPath(GhostUtils.GhostType.PersonalGhost, ref path);
+            if (forcedPath != "")
+                path = forcedPath;
+            if (!Directory.Exists(path))
+                Directory.CreateDirectory(path);
+            path = path + Path.DirectorySeparatorChar.ToString() + Anticheat.comboName + ".phant";
+
+            bool pathPreExists = File.Exists(path);
+            bool saveToTempAndInEditor = false;
+            if (pathPreExists)
+            {
+                float obj = float.MaxValue;
+                string text = "";
+                if (GhostUtils.GetPath(GhostUtils.GhostType.PersonalGhost, ref text))
+                {
+                    text = text + Path.DirectorySeparatorChar.ToString() + Anticheat.comboName + ".phant";
+                    if (File.Exists(text))
+                        obj = (float) ParseLevelTotalTimeCompressed.Invoke(null, new object[] { File.ReadAllText(text) });
+                }
+
+                Debug.LogError(obj.ToString() + "    " + totalTime.ToString());
+                bool replaceCurrentRecording = (obj > totalTime);
+                if (replaceCurrentRecording | saveToTempAndInEditor)
+                    SaveCompressedInternal.Invoke(null, new object[] { framesToSave, index, forcedPath, forcedID, saveToTemp, replaceCurrentRecording, totalTime, path, pathPreExists });
+                return false;
+            }
+            SaveCompressedInternal.Invoke(null, new object[] { framesToSave, index, forcedPath, forcedID, saveToTemp, true, totalTime, path, pathPreExists });
+            return false;
         }
 
         public static bool LoadCustomGhost(ref GhostSave ghostSave, ref GhostUtils.GhostType ghostType, ref Action callback)
